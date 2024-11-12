@@ -1,10 +1,14 @@
-from flask import Flask, request, jsonify, render_template
 import os
+from flask import Flask, request, jsonify, render_template
 import speech_recognition as sr
 from googletrans import Translator
 from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
+
+# Verificar si la carpeta 'uploads' existe, si no, crearla
+if not os.path.exists('uploads'):
+    os.makedirs('uploads')
 
 # Ruta para servir el archivo HTML
 @app.route('/')
