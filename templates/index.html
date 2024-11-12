@@ -1,36 +1,65 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Overlay de Traducción en OBS</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            color: white;
-            background-color: rgba(0, 0, 0, 0);
-            font-size: 24px;
-            text-align: center;
-            overflow: hidden;
-        }
-        #translatedText {
-            padding: 10px;
-        }
-    </style>
+    <title>Traductor en Vivo</title>
 </head>
 <body>
-    <div id="translatedText">Esperando traducción...</div>
+    <h1>Graba tu voz para traducir</h1>
+    <button id="startButton">Iniciar Grabación</button>
+    <button id="stopButton" disabled>Detener Grabación</button>
+
+    <h2>Texto Original:</h2>
+    <p id="transcript"></p>
+
+    <h2>Texto Traducido:</h2>
+    <p id="translated"></p>
 
     <script>
-        async function fetchTranslation() {
-            const response = await fetch('/translate', { method: 'POST' });
-            const data = await response.json();
-            if (data.text) {
-                document.getElementById('translatedText').innerText = data.text;
-            }
+        let mediaRecorder;
+        let audioChunks = [];
+        const startButton = document.getElementById('startButton');
+        const stopButton = document.getElementById('stopButton');
+        const transcriptParagraph = document.getElementById('transcript');
+        const translatedParagraph = document.getElementById('translated');
+
+        startButton.addEventListener('click', startRecording);
+        stopButton.addEventListener('click', stopRecording);
+
+        async function startRecording() {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorder = new MediaRecorder(stream);
+            mediaRecorder.ondataavailable = event => audioChunks.push(event.data);
+            mediaRecorder.onstop = sendAudio;
+            mediaRecorder.start();
+            startButton.disabled = true;
+            stopButton.disabled = false;
         }
 
-        setInterval(fetchTranslation, 2000);
+        function stopRecording() {
+            mediaRecorder.stop();
+            startButton.disabled = false;
+            stopButton.disabled = true;
+        }
+
+        function sendAudio() {
+            const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+            const formData = new FormData();
+            formData.append('audio', audioBlob, 'audio.wav');
+            formData.append('language', 'en');  // Puedes cambiar el idioma de destino aquí
+
+            fetch('/translate', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                transcriptParagraph.textContent = data.transcript;
+                translatedParagraph.textContent = data.translated_text;
+            })
+            .catch(error => console.error('Error al procesar el audio:', error));
+        }
     </script>
 </body>
 </html>

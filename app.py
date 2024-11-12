@@ -1,47 +1,51 @@
 import os
-from flask import Flask, render_template, request, jsonify
-import openai
+from flask import Flask, request, jsonify
 import speech_recognition as sr
-from deep_translator import GoogleTranslator
-from pydub import AudioSegment
-from pydub.playback import play
+from googletrans import Translator
+from werkzeug.utils import secure_filename
 
-# Configura tu API de OpenAI
-openai.api_key = "TU_API_KEY"
-
+# Configuración
 app = Flask(__name__)
 
-@app.route('/')
-def index():
-    return render_template('index.html')
-
+# Ruta para el procesamiento del audio y traducción
 @app.route('/translate', methods=['POST'])
 def translate():
+    # Verificar si el archivo 'audio' está presente en la solicitud
+    if 'audio' not in request.files:
+        return jsonify({"error": "No se encontró el archivo 'audio' en la solicitud"}), 400
+    
     audio_file = request.files['audio']
-    language_to = request.form['language_to']
+    
+    # Verificar si el archivo tiene un nombre
+    if audio_file.filename == '':
+        return jsonify({"error": "No se seleccionó ningún archivo"}), 400
 
-    # Guarda el archivo de audio
-    audio_path = "audio_input.wav"
+    # Guardar temporalmente el archivo
+    filename = secure_filename(audio_file.filename)
+    audio_path = os.path.join('uploads', filename)
     audio_file.save(audio_path)
 
-    # Usa SpeechRecognition y Whisper para detectar y transcribir el idioma
+    # Usar SpeechRecognition para transcribir el audio
     recognizer = sr.Recognizer()
-    with sr.AudioFile(audio_path) as source:
-        audio = recognizer.record(source)
-
+    
+    # Abrir el archivo de audio y convertirlo a texto
     try:
-        # Usa Whisper para transcripción de voz y detección de idioma
-        result = openai.Audio.transcribe("whisper-1", audio)
-        detected_text = result['text']
-        detected_language = result['language']
-
-        # Traduce el texto al idioma deseado usando deep-translator
-        translated_text = GoogleTranslator(source=detected_language, target=language_to).translate(detected_text)
-
-        # Devuelve el texto traducido como JSON
-        return jsonify({'text': translated_text})
+        with sr.AudioFile(audio_path) as source:
+            audio_data = recognizer.record(source)
+            transcript = recognizer.recognize_google(audio_data, language='es-ES')  # Transcribir a español
     except Exception as e:
-        return jsonify({'error': str(e)})
+        return jsonify({"error": f"No se pudo transcribir el audio: {str(e)}"}), 400
+
+    # Traducir el texto
+    translator = Translator()
+    target_language = request.form.get('language', 'en')  # Idioma de destino, por defecto inglés
+    translation = translator.translate(transcript, dest=target_language)
+
+    # Devolver la transcripción y la traducción
+    return jsonify({
+        "transcript": transcript,
+        "translated_text": translation.text
+    }), 200
 
 if __name__ == '__main__':
     app.run(debug=True)
