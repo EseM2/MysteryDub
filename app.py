@@ -1,11 +1,15 @@
+from flask import Flask, request, jsonify, render_template
 import os
-from flask import Flask, request, jsonify
 import speech_recognition as sr
 from googletrans import Translator
 from werkzeug.utils import secure_filename
 
-# Configuración
 app = Flask(__name__)
+
+# Ruta para servir el archivo HTML
+@app.route('/')
+def index():
+    return render_template('index.html')  # Asegúrate de que index.html esté en la carpeta "templates"
 
 # Ruta para el procesamiento del audio y traducción
 @app.route('/translate', methods=['POST'])
