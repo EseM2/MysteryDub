@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Overlay de Traducción en OBS</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            color: white;
+            background-color: rgba(0, 0, 0, 0);
+            font-size: 24px;
+            text-align: center;
+            overflow: hidden;
+        }
+        #translatedText {
+            padding: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div id="translatedText">Esperando traducción...</div>
+
+    <script>
+        async function fetchTranslation() {
+            const response = await fetch('/translate', { method: 'POST' });
+            const data = await response.json();
+            if (data.text) {
+                document.getElementById('translatedText').innerText = data.text;
+            }
+        }
+
+        setInterval(fetchTranslation, 2000);
+    </script>
+</body>
+</html>
