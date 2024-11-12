@@ -1,34 +1,29 @@
 from flask import Flask, request, jsonify
-from googletrans import Translator
+import speech_recognition as sr
+from translate import Translator
 
 app = Flask(__name__)
-translator = Translator()
 
+# Ruta para traducción
 @app.route('/translate', methods=['POST'])
 def translate():
-    try:
-        # Recibe los datos JSON desde la solicitud
-        data = request.get_json()
-        
-        # Extrae el texto a traducir y el idioma de destino
-        transcript = data.get('transcript')
-        target_language = data.get('language')
-        
-        if not transcript or not target_language:
-            return jsonify({"error": "Faltan datos en la solicitud."}), 400
+    # Captura el JSON del cliente
+    data = request.get_json()
 
-        # Realiza la traducción
-        translation = translator.translate(transcript, dest=target_language)
-        
-        # Devuelve la traducción en formato JSON
-        return jsonify({
-            'transcript': transcript,
-            'translated_text': translation.text
-        })
-    
+    # Verifica que se envió el texto y el idioma de destino
+    if 'transcript' not in data or 'language' not in data:
+        return jsonify({'error': 'Faltan datos en la solicitud'}), 400
+
+    transcript = data['transcript']
+    language = data['language']
+
+    # Traduce el texto usando Translator
+    translator = Translator(to_lang=language)
+    try:
+        translated_text = translator.translate(transcript)
+        return jsonify({'translated_text': translated_text})
     except Exception as e:
-        # En caso de error, muestra un mensaje descriptivo en JSON
-        return jsonify({"error": str(e)}), 500
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True)
