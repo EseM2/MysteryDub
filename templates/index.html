@@ -3,62 +3,121 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Traductor en Vivo</title>
+    <title>Transcriptor y Traductor en Tiempo Real</title>
+    <style>
+        /* Estilos para el overlay */
+        .overlay {
+            position: fixed;
+            bottom: 20px;
+            left: 0;
+            right: 0;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: #fff;
+            padding: 20px;
+            text-align: center;
+            font-size: 1.5rem;
+            z-index: 10;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        }
+        .visible {
+            opacity: 1;
+        }
+    </style>
 </head>
 <body>
-    <h1>Graba tu voz para traducir</h1>
-    <button id="startButton">Iniciar Grabación</button>
-    <button id="stopButton" disabled>Detener Grabación</button>
+    <h1>Transcriptor y Traductor en Tiempo Real</h1>
 
-    <h2>Texto Original:</h2>
-    <p id="transcript"></p>
+    <!-- Botón para iniciar la transcripción de audio -->
+    <button id="startButton">Iniciar Transcripción</button>
 
-    <h2>Texto Traducido:</h2>
-    <p id="translated"></p>
+    <!-- Selección del idioma de traducción -->
+    <label for="language">Idioma de traducción:</label>
+    <select id="language">
+        <option value="en">Inglés</option>
+        <option value="fr">Francés</option>
+        <option value="de">Alemán</option>
+        <!-- Agrega más opciones si deseas más idiomas -->
+    </select>
+
+    <!-- Overlay donde se mostrará el texto transcrito y traducido -->
+    <div id="overlay" class="overlay">
+        <p id="transcriptText"></p>
+        <p id="translatedText"></p>
+    </div>
 
     <script>
-        let mediaRecorder;
-        let audioChunks = [];
-        const startButton = document.getElementById('startButton');
-        const stopButton = document.getElementById('stopButton');
-        const transcriptParagraph = document.getElementById('transcript');
-        const translatedParagraph = document.getElementById('translated');
+        // Verificar si el navegador soporta SpeechRecognition
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+            alert('Tu navegador no soporta SpeechRecognition. Usa Chrome o Edge.');
+        } else {
+            const recognition = new SpeechRecognition();
+            recognition.lang = 'es-ES';  // Cambia según el idioma de entrada
+            recognition.interimResults = true;
+            recognition.continuous = true;
 
-        startButton.addEventListener('click', startRecording);
-        stopButton.addEventListener('click', stopRecording);
+            const startButton = document.getElementById('startButton');
+            const overlay = document.getElementById('overlay');
+            const transcriptText = document.getElementById('transcriptText');
+            const translatedText = document.getElementById('translatedText');
+            const languageSelect = document.getElementById('language');
 
-        async function startRecording() {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            mediaRecorder = new MediaRecorder(stream);
-            mediaRecorder.ondataavailable = event => audioChunks.push(event.data);
-            mediaRecorder.onstop = sendAudio;
-            mediaRecorder.start();
-            startButton.disabled = true;
-            stopButton.disabled = false;
-        }
+            let isListening = false;
 
-        function stopRecording() {
-            mediaRecorder.stop();
-            startButton.disabled = false;
-            stopButton.disabled = true;
-        }
+            // Función para iniciar o detener la grabación
+            startButton.onclick = () => {
+                if (!isListening) {
+                    recognition.start();
+                    startButton.innerText = 'Detener Transcripción';
+                } else {
+                    recognition.stop();
+                    startButton.innerText = 'Iniciar Transcripción';
+                }
+                isListening = !isListening;
+            };
 
-        function sendAudio() {
-            const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-            const formData = new FormData();
-            formData.append('audio', audioBlob, 'audio.wav');
-            formData.append('language', 'en');  // Puedes cambiar el idioma de destino aquí
+            // Evento que se activa cuando hay resultados de la transcripción
+            recognition.onresult = async (event) => {
+                const interimTranscript = Array.from(event.results)
+                    .map(result => result[0].transcript)
+                    .join('');
 
-            fetch('/translate', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                transcriptParagraph.textContent = data.transcript;
-                translatedParagraph.textContent = data.translated_text;
-            })
-            .catch(error => console.error('Error al procesar el audio:', error));
+                transcriptText.innerText = `Transcripción: ${interimTranscript}`;
+                overlay.classList.add('visible');
+
+                if (event.results[0].isFinal) {
+                    try {
+                        // Obtener idioma de traducción
+                        const targetLanguage = languageSelect.value;
+
+                        // Enviar la transcripción final al backend para traducir
+                        const response = await fetch('/translate', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                transcript: interimTranscript,
+                                language: targetLanguage
+                            })
+                        });
+                        const result = await response.json();
+
+                        // Mostrar la traducción en el overlay
+                        if (response.ok) {
+                            translatedText.innerText = `Traducción: ${result.translated_text}`;
+                        } else {
+                            translatedText.innerText = 'Error en la traducción.';
+                        }
+                    } catch (error) {
+                        console.error('Error:', error);
+                        translatedText.innerText = 'Error en el procesamiento.';
+                    }
+                }
+            };
+
+            recognition.onerror = (event) => {
+                console.error('Speech Recognition Error:', event.error);
+            };
         }
     </script>
 </body>

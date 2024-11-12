@@ -1,59 +1,34 @@
-import os
-from flask import Flask, request, jsonify, render_template
-import speech_recognition as sr
+from flask import Flask, request, jsonify
 from googletrans import Translator
-from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
+translator = Translator()
 
-# Verificar si la carpeta 'uploads' existe, si no, crearla
-if not os.path.exists('uploads'):
-    os.makedirs('uploads')
-
-# Ruta para servir el archivo HTML
-@app.route('/')
-def index():
-    return render_template('index.html')  # Asegúrate de que index.html esté en la carpeta "templates"
-
-# Ruta para el procesamiento del audio y traducción
 @app.route('/translate', methods=['POST'])
 def translate():
-    # Verificar si el archivo 'audio' está presente en la solicitud
-    if 'audio' not in request.files:
-        return jsonify({"error": "No se encontró el archivo 'audio' en la solicitud"}), 400
-    
-    audio_file = request.files['audio']
-    
-    # Verificar si el archivo tiene un nombre
-    if audio_file.filename == '':
-        return jsonify({"error": "No se seleccionó ningún archivo"}), 400
-
-    # Guardar temporalmente el archivo
-    filename = secure_filename(audio_file.filename)
-    audio_path = os.path.join('uploads', filename)
-    audio_file.save(audio_path)
-
-    # Usar SpeechRecognition para transcribir el audio
-    recognizer = sr.Recognizer()
-    
-    # Abrir el archivo de audio y convertirlo a texto
     try:
-        with sr.AudioFile(audio_path) as source:
-            audio_data = recognizer.record(source)
-            transcript = recognizer.recognize_google(audio_data, language='es-ES')  # Transcribir a español
+        # Recibe los datos JSON desde la solicitud
+        data = request.get_json()
+        
+        # Extrae el texto a traducir y el idioma de destino
+        transcript = data.get('transcript')
+        target_language = data.get('language')
+        
+        if not transcript or not target_language:
+            return jsonify({"error": "Faltan datos en la solicitud."}), 400
+
+        # Realiza la traducción
+        translation = translator.translate(transcript, dest=target_language)
+        
+        # Devuelve la traducción en formato JSON
+        return jsonify({
+            'transcript': transcript,
+            'translated_text': translation.text
+        })
+    
     except Exception as e:
-        return jsonify({"error": f"No se pudo transcribir el audio: {str(e)}"}), 400
-
-    # Traducir el texto
-    translator = Translator()
-    target_language = request.form.get('language', 'en')  # Idioma de destino, por defecto inglés
-    translation = translator.translate(transcript, dest=target_language)
-
-    # Devolver la transcripción y la traducción
-    return jsonify({
-        "transcript": transcript,
-        "translated_text": translation.text
-    }), 200
+        # En caso de error, muestra un mensaje descriptivo en JSON
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True)
